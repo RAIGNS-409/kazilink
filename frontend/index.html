@@ -1,0 +1,1584 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>KaziLink - Connect with Opportunities</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.0/index.min.css" rel="stylesheet">
+<style>
+body { font-family: 'Inter', sans-serif; background-color: #F8FAFC; }
+.glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0px); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+.animate-slideIn { animation: slideIn 0.4s ease-out forwards; }
+.animate-popIn { animation: popIn 0.3s ease-out forwards; }
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-slideDown { animation: slideDown 0.3s ease-out forwards; }
+.animate-spin { animation: spin 1s linear infinite; display: inline-block; }
+.card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.15), 0 10px 10px -5px rgba(99, 102, 241, 0.1); }
+.btn-primary { background: linear-gradient(135deg, #6366F1 0%, #0D9488 100%); transition: all 0.3s ease; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4); }
+.nav-link { position: relative; }
+.nav-link::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: linear-gradient(90deg, #6366F1, #0D9488); transition: width 0.3s ease; }
+.nav-link:hover::after { width: 100%; }
+.gradient-text { background: linear-gradient(135deg, #6366F1 0%, #0D9488 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+#toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+.toast { padding: 16px 24px; border-radius: 12px; color: white; font-weight: 500; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: slideIn 0.4s ease-out; min-width: 280px; max-width: 90vw; display: flex; align-items: center; gap: 12px; }
+.toast-success { background: linear-gradient(135deg, #10B981, #059669); }
+.toast-error { background: linear-gradient(135deg, #EF4444, #DC2626); }
+.toast-info { background: linear-gradient(135deg, #3B82F6, #2563EB); }
+.loader { border: 4px solid #f3f3f3; border-top: 4px solid #6366F1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 50px auto; }
+@media (max-width: 768px) {
+.mobile-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+.mobile-menu.open { max-height: 600px; }
+.touch-target { min-height: 44px; min-width: 44px; }
+input, select, textarea, button { font-size: 16px !important; }
+}
+</style>
+</head>
+<body class="min-h-screen flex flex-col relative overflow-x-hidden">
+<div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+<div class="absolute top-0 left-0 w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float"></div>
+<div class="absolute top-40 right-0 w-96 h-96 bg-teal-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-float" style="animation-delay: 2s;"></div>
+<div class="absolute bottom-0 left-1/3 w-96 h-96 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style="animation-delay: 4s;"></div>
+</div>
+<div id="toast-container"></div>
+<div id="app" class="flex flex-col min-h-screen">
+<div class="flex-grow flex items-center justify-center">
+<div class="loader"></div>
+</div>
+</div>
+<script>
+const AppState = {
+currentUser: null,
+currentView: 'home',
+viewParams: {},
+searchFilters: { keyword: '', category: '', location: '', salary: '', job_type: '' },
+editJobId: null,
+jobs: [],
+categories: ['Technology', 'Agriculture & Gardening', 'Administrative', 'Finance', 'Healthcare', 'Education', 'Marketing'],
+mobileMenuOpen: false
+};
+const $ = (id) => document.getElementById(id);
+const formatCurrency = (amount) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(amount);
+const API_BASE = window.location.origin + '/kazilink/api';
+const UPLOAD_URL = window.location.origin + '/kazilink/api/upload.php';
+
+function renderAvatar(avatarPath, fallback = '', sizeClass = 'w-full h-full object-cover') {
+if (avatarPath && avatarPath.startsWith('/')) {
+return `<img src="${avatarPath}" class="${sizeClass}" alt="Avatar" />`;
+}
+return fallback;
+}
+
+function showToast(message, type = 'success') {
+const container = $('toast-container');
+const toast = document.createElement('div');
+toast.className = `toast toast-${type}`;
+const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+toast.innerHTML = `<span class="text-xl font-bold">${icon}</span><span>${message}</span>`;
+container.appendChild(toast);
+setTimeout(() => {
+toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)'; toast.style.transition = 'all 0.3s ease';
+setTimeout(() => toast.remove(), 300);
+}, 3500);
+}
+async function apiCall(action, method = 'GET', body = null, isFormData = false) {
+try {
+const options = { method: method, credentials: 'include' };
+if (body) {
+if (isFormData) { options.body = body; }
+else { options.headers = { 'Content-Type': 'application/json' }; options.body = JSON.stringify(body); }
+}
+const url = API_BASE + '/api.php?action=' + action;
+const res = await fetch(url, options);
+if (!res.ok) throw new Error('HTTP ' + res.status);
+const data = await res.json();
+return data;
+} catch (err) {
+console.error('API Error:', err);
+return { status: 'error', message: 'Network error: ' + err.message };
+}
+}
+let uploadedFiles = { qual: null, exp: null };
+function handleFileSelect(inputId, displayId) {
+const input = document.getElementById(inputId);
+const display = document.getElementById(displayId);
+if (input.files && input.files[0]) {
+const file = input.files[0];
+display.textContent = file.name;
+if (inputId === 'qual-file') uploadedFiles.qual = file;
+else if (inputId === 'exp-file') uploadedFiles.exp = file;
+}
+}
+async function uploadFile(file) {
+if (!file) return null;
+const formData = new FormData();
+formData.append('file', file);
+try {
+const res = await fetch(UPLOAD_URL, { method: 'POST', body: formData, credentials: 'include' });
+const data = await res.json();
+if (data.status === 'success') return data.data.file_path;
+else { showToast(data.message, 'error'); return null; }
+} catch (err) { console.error('Upload error:', err); showToast('Upload failed', 'error'); return null; }
+}
+async function uploadProfilePicture(event) {
+const file = event.target.files[0];
+if (!file) return;
+const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+if (!allowedTypes.includes(file.type)) { showToast('Only JPG, JPEG, and PNG files are allowed', 'error'); return; }
+if (file.size > 2 * 1024 * 1024) { showToast('File too large (max 2MB)', 'error'); return; }
+const formData = new FormData();
+formData.append('profile_picture', file);
+showToast('Uploading profile picture...', 'info');
+const data = await apiCall('upload_profile_picture', 'POST', formData, true);
+if (data.status === 'success') { AppState.currentUser.profile_picture = data.data.file_path; showToast('Profile picture updated!', 'success'); render(); }
+else { showToast(data.message, 'error'); }
+}
+async function saveSocialLinks() {
+const payload = { portfolio_url: $('link-portfolio').value, github_url: $('link-github').value, linkedin_url: $('link-linkedin').value, twitter_url: $('link-twitter').value, facebook_url: $('link-facebook').value, instagram_url: $('link-instagram').value };
+const data = await apiCall('update_social_links', 'POST', payload);
+if (data.status === 'success') { AppState.currentUser = { ...AppState.currentUser, ...payload }; showToast('Social links saved!', 'success'); }
+else { showToast(data.message, 'error'); }
+}
+async function resendVerificationEmail() {
+const data = await apiCall('send_verification', 'POST');
+if (data.status === 'success') showToast('Verification email sent! Check your inbox.', 'success');
+else showToast(data.message, 'error');
+}
+async function loadInitialData() {
+const userData = await apiCall('get_user');
+if (userData.status === 'success') AppState.currentUser = userData.data;
+const jobsData = await apiCall('get_jobs');
+if (jobsData.status === 'success') AppState.jobs = jobsData.data.map(j => ({ ...j, required_qualifications: j.required_qualifications ? j.required_qualifications.split(',') : [] }));
+render();
+}
+function toggleMobileMenu() {
+AppState.mobileMenuOpen = !AppState.mobileMenuOpen;
+const menu = document.getElementById('mobile-menu');
+if (menu) {
+if (AppState.mobileMenuOpen) menu.classList.add('open');
+else menu.classList.remove('open');
+}
+}
+function navigate(view, params = {}) {
+AppState.currentView = view;
+AppState.viewParams = params;
+AppState.mobileMenuOpen = false;
+render();
+window.scrollTo({ top: 0, behavior: 'smooth' });
+setTimeout(() => {
+if (view === 'admin-dashboard') loadAdminStats();
+if (view === 'admin-users') loadAdminUsers();
+if (view === 'admin-jobs') loadAdminJobs();
+if (view === 'admin-reports') loadAdminReports();
+if (view === 'seeker-applications') loadMyApplications();
+if (view === 'employer-applicants' && params.jobId) loadJobApplicants(params.jobId);
+}, 100);
+}
+async function handleLogin(e) {
+e.preventDefault();
+const email = $('login-email').value;
+const password = $('login-password').value;
+const data = await apiCall('login', 'POST', { email, password });
+if (data.status === 'success') {
+AppState.currentUser = data.data;
+showToast(`Welcome back, ${AppState.currentUser.full_name}!`, 'success');
+if (AppState.currentUser.role === 'admin') navigate('admin-dashboard');
+else if (AppState.currentUser.role === 'employer') navigate('employer-dashboard');
+else navigate('seeker-dashboard');
+} else { showToast(data.message, 'error'); }
+}
+async function handleRegister(e) {
+e.preventDefault();
+const payload = { full_name: $('reg-name').value, email: $('reg-email').value, password: $('reg-password').value, role: $('reg-role').value, phone: $('reg-phone').value };
+const data = await apiCall('register', 'POST', payload);
+if (data.status === 'success') {
+showToast('Account created! Please check your email to verify your account.', 'success');
+setTimeout(() => { alert('Please check your email inbox and click the verification link to activate your account.'); navigate('login'); }, 2000);
+} else { showToast(data.message, 'error'); }
+}
+async function logout() {
+await apiCall('logout', 'POST');
+AppState.currentUser = null;
+showToast('Logged out successfully.', 'info');
+navigate('home');
+}
+async function applyForJob(jobId) {
+if (!AppState.currentUser) { navigate('login'); return; }
+if (AppState.currentUser.role !== 'seeker') { showToast('Only job seekers can apply.', 'error'); return; }
+if (AppState.jobs.find(j => j.id == jobId).applied) { showToast('You have already applied.', 'error'); return; }
+const data = await apiCall('apply_job', 'POST', { job_id: jobId });
+if (data.status === 'success') {
+showToast('Application submitted successfully!', 'success');
+const job = AppState.jobs.find(j => j.id == jobId);
+if(job) job.applied = true;
+navigate('seeker-applications');
+} else { showToast(data.message, 'error'); }
+}
+async function postJob(e) {
+e.preventDefault();
+const payload = { title: $('job-title').value, category: $('job-category').value, description: $('job-desc').value, location: $('job-location').value, salary: parseInt($('job-salary').value), deadline: $('job-deadline').value, job_type: $('job-type').value, required_qualifications: $('job-req-quals').value };
+const data = await apiCall('post_job', 'POST', payload);
+if (data.status === 'success') {
+showToast('Job posted successfully!', 'success');
+AppState.editJobId = null;
+const jobsData = await apiCall('get_jobs');
+if (jobsData.status === 'success') AppState.jobs = jobsData.data;
+navigate('employer-manage-jobs');
+} else { showToast(data.message, 'error'); }
+}
+function editJob(jobId) {
+const job = AppState.jobs.find(j => j.id == jobId);
+if (!job) return;
+AppState.editJobId = jobId;
+navigate('employer-post-job');
+setTimeout(() => { $('job-title').value = job.title; $('job-category').value = job.category; $('job-desc').value = job.description; $('job-location').value = job.location; $('job-salary').value = job.salary; $('job-deadline').value = job.deadline; $('job-type').value = job.job_type; $('job-req-quals').value = (job.required_qualifications || []).join(', '); }, 50);
+}
+async function updateProfile(e) {
+e.preventDefault();
+const payload = { full_name: $('prof-name').value, phone: $('prof-phone').value, bio: $('prof-bio').value, skills: $('prof-skills').value };
+const data = await apiCall('update_profile', 'POST', payload);
+if (data.status === 'success') { AppState.currentUser = { ...AppState.currentUser, ...payload }; showToast('Profile updated!', 'success'); render(); }
+else { showToast(data.message, 'error'); }
+}
+async function addQualification() {
+const name = $('qual-name').value; const issuer = $('qual-issuer').value; const date = $('qual-date').value;
+if (!name || !issuer) { showToast('Please fill in qualification name and issuer', 'error'); return; }
+let docPath = 'No document uploaded';
+if (uploadedFiles.qual) { showToast('Uploading file...', 'info'); docPath = await uploadFile(uploadedFiles.qual); if (!docPath) return; }
+const payload = { name, issuer, date, doc: docPath };
+const data = await apiCall('add_qualification', 'POST', payload);
+if (data.status === 'success') { showToast('Qualification added successfully!', 'success'); $('qual-name').value = ''; $('qual-issuer').value = ''; $('qual-date').value = ''; $('qual-file').value = ''; $('qual-file-name').textContent = 'No file chosen'; uploadedFiles.qual = null; render(); }
+else { showToast(data.message, 'error'); }
+}
+async function addExperience() {
+const title = $('exp-title').value; const duration = $('exp-duration').value;
+if (!title || !duration) { showToast('Please fill in job title and duration', 'error'); return; }
+let proofPath = 'No proof uploaded';
+if (uploadedFiles.exp) { showToast('Uploading file...', 'info'); proofPath = await uploadFile(uploadedFiles.exp); if (!proofPath) return; }
+const payload = { title, duration, proof: proofPath };
+const data = await apiCall('add_experience', 'POST', payload);
+if (data.status === 'success') { showToast('Experience added successfully!', 'success'); $('exp-title').value = ''; $('exp-duration').value = ''; $('exp-file').value = ''; $('exp-file-name').textContent = 'No file chosen'; uploadedFiles.exp = null; render(); }
+else { showToast(data.message, 'error'); }
+}
+function updateSearchFilter(key, value) { AppState.searchFilters[key] = value; render(); }
+function render() {
+const { currentUser, currentView } = AppState;
+let html = renderNavbar();
+html += '<main class="flex-grow pt-20">';
+switch (currentView) {
+case 'home': html += renderHome(); break;
+case 'about': html += renderAbout(); break;
+case 'contact': html += renderContact(); break;
+case 'jobs': html += renderPublicJobs(); break;
+case 'job-details': html += renderJobDetails(AppState.viewParams.id); break;
+case 'login': html += renderLogin(); break;
+case 'register': html += renderRegister(); break;
+case 'seeker-dashboard': html += currentUser ? renderSeekerDashboard() : renderLogin(); break;
+case 'seeker-profile': html += currentUser ? renderSeekerProfile() : renderLogin(); break;
+case 'seeker-search': html += renderSeekerSearch(); break;
+case 'seeker-applications': html += currentUser ? renderSeekerApplications() : renderLogin(); break;
+case 'employer-dashboard': html += currentUser ? renderEmployerDashboard() : renderLogin(); break;
+case 'employer-post-job': html += currentUser ? renderEmployerPostJob() : renderLogin(); break;
+case 'employer-manage-jobs': html += currentUser ? renderEmployerManageJobs() : renderLogin(); break;
+case 'employer-applicants': html += currentUser ? renderEmployerApplicants(AppState.viewParams.jobId) : renderLogin(); break;
+case 'admin-dashboard': html += currentUser && currentUser.role === 'admin' ? renderAdminDashboard() : renderLogin(); break;
+case 'admin-users': html += currentUser && currentUser.role === 'admin' ? renderAdminUsers() : renderLogin(); break;
+case 'admin-jobs': html += currentUser && currentUser.role === 'admin' ? renderAdminJobs() : renderLogin(); break;
+case 'admin-reports': html += currentUser && currentUser.role === 'admin' ? renderAdminReports() : renderLogin(); break;
+default: html += renderHome();
+}
+html += '</main>' + renderFooter();
+$('app').innerHTML = html;
+}
+function renderNavbar() {
+const { currentUser } = AppState;
+const links = currentUser ? getRoleLinks(currentUser.role) : getPublicLinks();
+return `
+<nav class="fixed top-0 w-full z-50 glass border-b border-slate-200/50 shadow-sm">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-center h-16">
+<div class="flex items-center cursor-pointer" onclick="navigate('home')">
+<img src="https://image.qwenlm.ai/public_source/bc96688c-8f85-4680-8f59-fe72067bb9e0/1b9b2147d-a115-92dc-a98c-75b514408636.png" class="h-10 w-auto" alt="KaziLink Logo" />
+<span class="ml-2 text-xl font-bold gradient-text hidden sm:block">KaziLink</span>
+</div>
+<div class="hidden md:flex items-center space-x-8">
+${links.map(l => `<a href="#" onclick="navigate('${l.view}')" class="nav-link text-slate-600 hover:text-indigo-600 font-medium transition-colors ${AppState.currentView === l.view ? 'text-indigo-600' : ''}">${l.label}</a>`).join('')}
+</div>
+<div class="flex items-center space-x-4">
+${currentUser ? `
+<div class="hidden md:flex items-center space-x-3">
+<span class="text-sm text-slate-600 font-medium">${currentUser.full_name}</span>
+<div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-white text-lg shadow-md overflow-hidden">
+${currentUser.profile_picture ? `<img src="${currentUser.profile_picture}" class="w-full h-full object-cover" alt="Profile" />` : '👤'}
+</div>
+</div>
+<button onclick="logout()" class="hidden md:block px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">Logout</button>
+<button onclick="toggleMobileMenu()" class="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg touch-target">
+<i class="ph ph-list text-2xl"></i>
+</button>
+` : `
+<button onclick="navigate('login')" class="hidden md:block px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">Login</button>
+<button onclick="navigate('register')" class="hidden md:block btn-primary px-4 py-2 text-sm font-medium text-white rounded-lg shadow-md">Register</button>
+<button onclick="toggleMobileMenu()" class="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg touch-target">
+<i class="ph ph-list text-2xl"></i>
+</button>
+`}
+</div>
+</div>
+<div id="mobile-menu" class="mobile-menu md:hidden border-t border-slate-200">
+<div class="px-4 py-3 space-y-2">
+${currentUser ? `
+<div class="flex items-center gap-3 py-3 border-b border-slate-100">
+<div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-white shadow-md overflow-hidden">
+${currentUser.profile_picture ? `<img src="${currentUser.profile_picture}" class="w-full h-full object-cover" alt="Profile" />` : '👤'}
+</div>
+<div>
+<div class="font-semibold text-slate-900">${currentUser.full_name}</div>
+<div class="text-xs text-slate-500">${currentUser.email}</div>
+</div>
+</div>
+${links.map(l => `<a href="#" onclick="navigate('${l.view}')" class="block px-4 py-3 text-slate-700 hover:bg-indigo-50 rounded-lg font-medium touch-target flex items-center gap-2"><i class="ph ${l.icon || 'ph-circle'}"></i> ${l.label}</a>`).join('')}
+<button onclick="logout()" class="w-full px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium touch-target flex items-center gap-2">
+<i class="ph ph-sign-out"></i> Logout
+</button>
+` : `
+${links.map(l => `<a href="#" onclick="navigate('${l.view}')" class="block px-4 py-3 text-slate-700 hover:bg-indigo-50 rounded-lg font-medium touch-target flex items-center gap-2"><i class="ph ${l.icon || 'ph-circle'}"></i> ${l.label}</a>`).join('')}
+<div class="pt-3 border-t border-slate-100 space-y-2">
+<button onclick="navigate('login')" class="w-full px-4 py-3 text-indigo-600 hover:bg-indigo-50 rounded-lg font-medium touch-target">Login</button>
+<button onclick="navigate('register')" class="w-full btn-primary px-4 py-3 text-white rounded-lg font-medium touch-target">Register</button>
+</div>
+`}
+</div>
+</div>
+</div>
+</nav>
+`;
+}
+function getPublicLinks() { return [{ view: 'home', label: 'Home', icon: 'ph-house' }, { view: 'jobs', label: 'Jobs', icon: 'ph-briefcase' }, { view: 'about', label: 'About', icon: 'ph-info' }, { view: 'contact', label: 'Contact', icon: 'ph-envelope' }]; }
+function getRoleLinks(role) {
+const base = [{ view: 'home', label: 'Home', icon: 'ph-house' }, { view: 'jobs', label: 'Browse Jobs', icon: 'ph-briefcase' }];
+if (role === 'seeker') return [...base, { view: 'seeker-dashboard', label: 'Dashboard', icon: 'ph-gauge' }, { view: 'seeker-search', label: 'Search', icon: 'ph-magnifying-glass' }, { view: 'seeker-applications', label: 'Applications', icon: 'ph-file-text' }, { view: 'seeker-profile', label: 'Profile', icon: 'ph-user' }];
+if (role === 'employer') return [...base, { view: 'employer-dashboard', label: 'Dashboard', icon: 'ph-gauge' }, { view: 'employer-post-job', label: 'Post Job', icon: 'ph-plus-circle' }, { view: 'employer-manage-jobs', label: 'Manage Jobs', icon: 'ph-list' }];
+if (role === 'admin') return [...base, { view: 'admin-dashboard', label: 'Dashboard', icon: 'ph-gauge' }, { view: 'admin-users', label: 'Users', icon: 'ph-users' }, { view: 'admin-jobs', label: 'Jobs', icon: 'ph-briefcase' }, { view: 'admin-reports', label: 'Reports', icon: 'ph-chart-bar' }];
+return base;
+}
+function renderFooter() {
+return `
+<footer class="bg-slate-900 text-slate-300 mt-20">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+<div class="col-span-1 md:col-span-2">
+<div class="flex items-center mb-4">
+<img src="https://image.qwenlm.ai/public_source/bc96688c-8f85-4680-8f59-fe72067bb9e0/1b9b2147d-a115-92dc-a98c-75b514408636.png" class="h-10 w-auto" alt="KaziLink" />
+<span class="ml-2 text-xl font-bold text-white">KaziLink</span>
+</div>
+<p class="text-slate-400 max-w-md">Connecting top talent with leading employers across Kenya and beyond.</p>
+</div>
+<div>
+<h4 class="text-white font-semibold mb-4">Quick Links</h4>
+<ul class="space-y-2">
+<li><a href="#" onclick="navigate('home')" class="hover:text-white transition-colors">Home</a></li>
+<li><a href="#" onclick="navigate('jobs')" class="hover:text-white transition-colors">Jobs</a></li>
+<li><a href="#" onclick="navigate('about')" class="hover:text-white transition-colors">About</a></li>
+<li><a href="#" onclick="navigate('contact')" class="hover:text-white transition-colors">Contact</a></li>
+</ul>
+</div>
+<div>
+<h4 class="text-white font-semibold mb-4">Contact Admin</h4>
+<ul class="space-y-3 text-slate-400">
+<li class="flex items-start gap-2">
+<i class="ph ph-envelope-simple text-indigo-400 mt-1"></i>
+<a href="mailto:kibetdaniel411@gmail.com" class="hover:text-white transition-colors break-all text-sm">kibetdaniel411@gmail.com</a>
+</li>
+<li class="flex items-start gap-2">
+<i class="ph ph-phone text-indigo-400 mt-1"></i>
+<a href="tel:+254790092644" class="hover:text-white transition-colors">0790 092 644</a>
+</li>
+<li class="flex items-start gap-2">
+<i class="ph ph-map-pin text-indigo-400 mt-1"></i>
+<span>Nairobi, Kenya</span>
+</li>
+</ul>
+</div>
+</div>
+<div class="border-t border-slate-800 mt-12 pt-8 text-center text-slate-500 text-sm">
+<p>&copy; 2024 KaziLink. All rights reserved.</p>
+<p class="mt-2">Admin: kibetdaniel411@gmail.com | 0790 092 644</p>
+</div>
+</div>
+</footer>
+`;
+}
+function renderHome() {
+const recentJobs = AppState.jobs.filter(j => j.status === 'active').slice(0, 3);
+return `
+<section class="relative overflow-hidden">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-32">
+<div class="grid lg:grid-cols-2 gap-12 items-center">
+<div class="animate-fadeIn">
+<div class="inline-flex items-center px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 text-sm font-medium mb-6">
+<span class="w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse"></span> Over 10,000+ Jobs in Kenya
+</div>
+<h1 class="text-4xl lg:text-6xl font-extrabold text-slate-900 leading-tight mb-6">Find Your <span class="gradient-text">Dream Kazi</span> Today</h1>
+<p class="text-lg lg:text-xl text-slate-600 mb-8 leading-relaxed">Whether you're a tech professional, a skilled gardener, or a remote freelancer, KaziLink connects you with the right opportunities.</p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button onclick="navigate('register')" class="btn-primary px-8 py-4 text-white font-semibold rounded-xl shadow-lg text-lg touch-target">Get Started Free</button>
+<button onclick="navigate('jobs')" class="px-8 py-4 text-slate-700 font-semibold rounded-xl border-2 border-slate-200 hover:border-indigo-500 hover:text-indigo-600 transition-all text-lg bg-white touch-target">Browse Jobs</button>
+</div>
+</div>
+<div class="relative animate-popIn hidden lg:block">
+<div class="absolute inset-0 bg-gradient-to-r from-indigo-500 to-teal-500 rounded-3xl transform rotate-3 opacity-20"></div>
+<div class="relative rounded-3xl shadow-2xl border-4 border-white bg-white p-6">
+<div class="flex items-center gap-4 mb-4">
+<div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center text-2xl">🌱</div>
+<div><h3 class="font-bold text-slate-900">Professional Gardener</h3><p class="text-sm text-indigo-600">Mombasa Greenery Ltd</p></div>
+</div>
+<div class="flex gap-2 mb-4">
+<span class="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">📍 Mombasa</span>
+<span class="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">💰 KSh 45,000</span>
+</div>
+<button class="w-full btn-primary py-2 text-white font-semibold rounded-lg">View Details</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="bg-slate-50 py-16 lg:py-20">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex justify-between items-end mb-8 lg:mb-12">
+<div><h2 class="text-2xl lg:text-3xl font-bold text-slate-900 mb-2">Featured Jobs</h2></div>
+<button onclick="navigate('jobs')" class="hidden md:flex items-center gap-2 text-indigo-600 font-semibold hover:gap-3 transition-all">View All <i class="ph ph-arrow-right"></i></button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+${recentJobs.map(job => {
+return `<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm cursor-pointer" onclick="navigate('job-details', {id: ${job.id}})">
+<div class="flex items-start justify-between mb-4">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-teal-100 flex items-center justify-center text-2xl overflow-hidden">
+${renderAvatar(job.employer_avatar, '🏢')}
+</div>
+<span class="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">${job.job_type}</span>
+</div>
+<h3 class="font-bold text-lg text-slate-900 mb-1">${job.title}</h3>
+<p class="text-sm text-indigo-600 font-medium mb-4">${job.company}</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md flex items-center gap-1"><i class="ph ph-map-pin"></i> ${job.location}</span>
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md flex items-center gap-1"><i class="ph ph-currency-dollar"></i> ${formatCurrency(job.salary)}</span>
+</div>
+</div>`;
+}).join('')}
+</div>
+<div class="mt-6 md:hidden text-center">
+<button onclick="navigate('jobs')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl touch-target">View All Jobs</button>
+</div>
+</div>
+</section>
+`;
+}
+function renderAbout() {
+return `<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20 animate-fadeIn">
+<div class="text-center mb-12 lg:mb-16"><h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">About <span class="gradient-text">KaziLink</span></h1></div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-12">
+${[{ icon: 'ph-shield-check', title: 'Trust & Security', desc: 'Verified employers and secure applications' },
+{ icon: 'ph-lightning', title: 'Fast & Efficient', desc: 'Quick job matching and notifications' },
+{ icon: 'ph-globe', title: 'Flexible Work', desc: 'Remote, full-time, and contract opportunities' }].map(v => `
+<div class="card-hover bg-white rounded-2xl p-6 border border-slate-100 text-center">
+<div class="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center mx-auto mb-4 text-white"><i class="ph ${v.icon} text-2xl"></i></div>
+<h3 class="font-bold text-lg text-slate-900 mb-2">${v.title}</h3>
+<p class="text-sm text-slate-600">${v.desc}</p>
+</div>`).join('')}
+</div>
+<div class="bg-gradient-to-br from-indigo-600 to-teal-600 rounded-3xl p-8 lg:p-12 text-white text-center">
+<h2 class="text-2xl lg:text-3xl font-bold mb-4">Need Help?</h2>
+<p class="text-indigo-100 mb-8 max-w-xl mx-auto">Our admin team is here to assist you with any questions or concerns.</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+<a href="mailto:kibetdaniel411@gmail.com" class="bg-white/10 backdrop-blur rounded-2xl p-6 hover:bg-white/20 transition-colors">
+<i class="ph ph-envelope-simple text-3xl mb-3"></i>
+<div class="font-semibold mb-1">Email Admin</div>
+<div class="text-sm text-indigo-100 break-all">kibetdaniel411@gmail.com</div>
+</a>
+<a href="tel:+254790092644" class="bg-white/10 backdrop-blur rounded-2xl p-6 hover:bg-white/20 transition-colors">
+<i class="ph ph-phone text-3xl mb-3"></i>
+<div class="font-semibold mb-1">Call Admin</div>
+<div class="text-sm text-indigo-100">0790 092 644</div>
+</a>
+</div>
+</div>
+</section>`;
+}
+function renderContact() {
+return `<section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20 animate-fadeIn">
+<div class="text-center mb-8 lg:mb-12">
+<h1 class="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">Get in <span class="gradient-text">Touch</span></h1>
+<p class="text-slate-600 max-w-2xl mx-auto">Have questions or need help? Reach out to our admin team.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm text-center card-hover">
+<div class="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-4">
+<i class="ph ph-envelope-simple text-3xl text-indigo-600"></i>
+</div>
+<h3 class="font-bold text-slate-900 mb-2">Email Us</h3>
+<a href="mailto:kibetdaniel411@gmail.com" class="text-indigo-600 hover:underline break-all text-sm">kibetdaniel411@gmail.com</a>
+<p class="text-sm text-slate-500 mt-2">We respond within 24 hours</p>
+</div>
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm text-center card-hover">
+<div class="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4">
+<i class="ph ph-phone text-3xl text-teal-600"></i>
+</div>
+<h3 class="font-bold text-slate-900 mb-2">Call Us</h3>
+<a href="tel:+254790092644" class="text-teal-600 hover:underline">0790 092 644</a>
+<p class="text-sm text-slate-500 mt-2">Mon - Fri, 9am - 6pm EAT</p>
+</div>
+<div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm text-center card-hover">
+<div class="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+<i class="ph ph-map-pin text-3xl text-amber-600"></i>
+</div>
+<h3 class="font-bold text-slate-900 mb-2">Visit Us</h3>
+<p class="text-slate-600">Nairobi, Kenya</p>
+<p class="text-sm text-slate-500 mt-2">By appointment only</p>
+</div>
+</div>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 lg:p-10 max-w-3xl mx-auto">
+<h2 class="text-2xl font-bold text-slate-900 mb-6 text-center">Send Us a Message</h2>
+<form onsubmit="handleContactForm(event)" class="space-y-5">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2">Your Name</label>
+<input id="contact-name" type="text" required placeholder="John Doe" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2">Your Email</label>
+<input id="contact-email" type="email" required placeholder="john@example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2">Subject</label>
+<input id="contact-subject" type="text" required placeholder="How can we help?" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2">Message</label>
+<textarea id="contact-message" required rows="5" placeholder="Tell us more..." class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none touch-target"></textarea>
+</div>
+<button type="submit" id="contact-submit-btn" class="btn-primary w-full py-3 text-white font-semibold rounded-xl shadow-lg touch-target flex items-center justify-center gap-2">
+<i class="ph ph-paper-plane-right"></i> Send Message
+</button>
+</form>
+</div>
+<div class="mt-12 bg-gradient-to-r from-indigo-50 to-teal-50 rounded-2xl p-6 lg:p-8 border border-indigo-100 max-w-3xl mx-auto">
+<div class="flex flex-col md:flex-row items-center gap-6">
+<div class="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-white text-3xl shadow-lg flex-shrink-0">👨‍💼</div>
+<div class="text-center md:text-left">
+<h3 class="text-xl font-bold text-slate-900 mb-2">KaziLink Administrator</h3>
+<div class="space-y-1 text-slate-600">
+<p class="flex items-center gap-2 justify-center md:justify-start">
+<i class="ph ph-envelope-simple text-indigo-600"></i>
+<a href="mailto:kibetdaniel411@gmail.com" class="hover:text-indigo-600 break-all">kibetdaniel411@gmail.com</a>
+</p>
+<p class="flex items-center gap-2 justify-center md:justify-start">
+<i class="ph ph-phone text-teal-600"></i>
+<a href="tel:+254790092644" class="hover:text-teal-600">0790 092 644</a>
+</p>
+</div>
+</div>
+</div>
+</div>
+</section>`;
+}
+async function handleContactForm(e) {
+e.preventDefault();
+const name = $('contact-name').value;
+const email = $('contact-email').value;
+const subject = $('contact-subject').value;
+const message = $('contact-message').value;
+const submitBtn = $('contact-submit-btn');
+submitBtn.disabled = true;
+submitBtn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Sending...';
+try {
+const data = await apiCall('contact', 'POST', {
+name: name,
+email: email,
+subject: subject,
+message: message
+});
+if (data.status === 'success') {
+showToast(data.message, 'success');
+$('contact-name').value = '';
+$('contact-email').value = '';
+$('contact-subject').value = '';
+$('contact-message').value = '';
+} else {
+showToast(data.message, 'error');
+}
+} catch (err) {
+showToast('Network error. Please try again.', 'error');
+} finally {
+submitBtn.disabled = false;
+submitBtn.innerHTML = '<i class="ph ph-paper-plane-right"></i> Send Message';
+}
+}
+function renderPublicJobs() {
+const jobs = AppState.jobs.filter(j => j.status === 'active');
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-8"><h1 class="text-3xl font-bold text-slate-900 mb-2">All Open Positions</h1></div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+${jobs.map(job => {
+return `<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm cursor-pointer" onclick="navigate('job-details', {id: ${job.id}})">
+<div class="flex items-start justify-between mb-4">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-teal-100 flex items-center justify-center text-2xl overflow-hidden">
+${renderAvatar(job.employer_avatar, '🏢')}
+</div>
+<span class="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">${job.job_type}</span>
+</div>
+<h3 class="font-bold text-lg text-slate-900 mb-1">${job.title}</h3>
+<p class="text-sm text-indigo-600 font-medium mb-4">${job.company}</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md flex items-center gap-1"><i class="ph ph-map-pin"></i> ${job.location}</span>
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md flex items-center gap-1"><i class="ph ph-currency-dollar"></i> ${formatCurrency(job.salary)}</span>
+</div>
+</div>`;
+}).join('')}
+</div>
+</section>`;
+}
+function renderJobDetails(jobId) {
+const job = AppState.jobs.find(j => j.id == jobId);
+if (!job) return `<div class="text-center py-20">Job not found.</div>`;
+const hasApplied = AppState.currentUser && AppState.currentUser.role === 'seeker' && job.applied;
+return `<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<button onclick="history.back()" class="mb-6 text-slate-600 hover:text-indigo-600 flex items-center gap-2 font-medium touch-target"><i class="ph ph-arrow-left"></i> Back</button>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+<div class="bg-gradient-to-r from-indigo-600 to-teal-600 p-6 lg:p-8 text-white">
+<div class="flex items-start justify-between">
+<div><h1 class="text-2xl lg:text-3xl font-bold mb-2">${job.title}</h1><p class="text-indigo-100 text-lg">${job.company}</p></div>
+<div class="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-3xl overflow-hidden">
+${renderAvatar(job.employer_avatar, '')}
+</div>
+</div>
+</div>
+<div class="p-4 lg:p-8">
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-6 lg:mb-8">
+${[{ icon: 'ph-map-pin', label: 'Location', val: job.location }, { icon: 'ph-currency-dollar', label: 'Salary', val: formatCurrency(job.salary) }, { icon: 'ph-clock', label: 'Job Type', val: job.job_type }, { icon: 'ph-calendar', label: 'Deadline', val: job.deadline }].map(i => `
+<div class="p-3 lg:p-4 rounded-xl bg-slate-50 border border-slate-100"><div class="flex items-center gap-2 text-slate-500 text-xs lg:text-sm mb-1"><i class="ph ${i.icon}"></i> ${i.label}</div><div class="font-semibold text-slate-900 text-sm lg:text-base">${i.val}</div></div>
+`).join('')}
+</div>
+${job.required_qualifications && job.required_qualifications.length ? `
+<div class="mb-6 lg:mb-8 p-4 lg:p-6 bg-indigo-50 border border-indigo-100 rounded-2xl">
+<h2 class="text-lg lg:text-xl font-bold text-slate-900 mb-4 flex items-center gap-2"><i class="ph ph-graduation-cap text-indigo-600"></i> Required Qualifications</h2>
+<ul class="space-y-2 mb-4">
+${job.required_qualifications.map(q => `<li class="flex items-start gap-2 text-slate-700"><i class="ph ph-check-circle text-teal-500 mt-1"></i> ${q.trim()}</li>`).join('')}
+</ul>
+</div>
+` : ''}
+<h2 class="text-lg lg:text-xl font-bold text-slate-900 mb-4">Job Description</h2>
+<p class="text-slate-700 leading-relaxed mb-6 lg:mb-8 whitespace-pre-line">${job.description}</p>
+<div class="border-t border-slate-100 pt-6 lg:pt-8 flex flex-col sm:flex-row gap-3 lg:gap-4">
+${AppState.currentUser && AppState.currentUser.role === 'seeker' ? `
+${hasApplied ? `<div class="flex-1 px-6 py-4 rounded-xl bg-slate-100 text-slate-600 font-semibold text-center touch-target flex items-center justify-center">You have already applied</div>` : `<button onclick="applyForJob(${job.id})" class="btn-primary flex-1 px-6 py-4 text-white font-semibold rounded-xl shadow-lg text-lg touch-target">Apply Now</button>`}
+` : `<button onclick="navigate('login')" class="btn-primary flex-1 px-6 py-4 text-white font-semibold rounded-xl shadow-lg text-lg touch-target">Login to Apply</button>`}
+</div>
+</div>
+</div>
+</section>`;
+}
+function renderLogin() {
+return `<section class="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20 animate-popIn">
+<div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 lg:p-8">
+<div class="text-center mb-6 lg:mb-8">
+<img src="https://image.qwenlm.ai/public_source/bc96688c-8f85-4680-8f59-fe72067bb9e0/1b9b2147d-a115-92dc-a98c-75b514408636.png" class="h-16 w-auto mx-auto mb-4" alt="KaziLink" />
+<h1 class="text-2xl font-bold text-slate-900">Welcome Back</h1>
+</div>
+<form onsubmit="handleLogin(event)" class="space-y-4">
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Email</label><input id="login-email" type="email" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Password</label><input id="login-password" type="password" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div class="text-right">
+<a href="/kazilink/frontend/forgot-password.html" class="text-sm text-indigo-600 hover:underline">Forgot Password?</a>
+</div>
+<button type="submit" class="btn-primary w-full py-3 text-white font-semibold rounded-xl shadow-lg touch-target">Login</button>
+</form>
+<div class="mt-6 text-center">
+<p class="text-slate-500 text-sm">Don't have an account? <a href="#" onclick="navigate('register')" class="text-indigo-600 font-semibold hover:underline">Register</a></p>
+</div>
+</div>
+</section>`;
+}
+function renderRegister() {
+return `<section class="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20 animate-popIn">
+<div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 lg:p-8">
+<div class="text-center mb-6 lg:mb-8">
+<img src="https://image.qwenlm.ai/public_source/bc96688c-8f85-4680-8f59-fe72067bb9e0/1b9b2147d-a115-92dc-a98c-75b514408636.png" class="h-16 w-auto mx-auto mb-4" alt="KaziLink" />
+<h1 class="text-2xl font-bold text-slate-900">Create Account</h1>
+</div>
+<form onsubmit="handleRegister(event)" class="space-y-4">
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Full Name / Company Name</label><input id="reg-name" type="text" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Email</label><input id="reg-email" type="email" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Phone</label><input id="reg-phone" type="tel" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">I am a...</label>
+<select id="reg-role" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white touch-target"><option value="seeker">Job Seeker</option><option value="employer">Employer</option></select>
+</div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Password</label><input id="reg-password" type="password" required minlength="6" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<button type="submit" class="btn-primary w-full py-3 text-white font-semibold rounded-xl shadow-lg touch-target">Create Account</button>
+</form>
+<div class="mt-6 text-center">
+<p class="text-slate-500 text-sm">Already have an account? <a href="#" onclick="navigate('login')" class="text-indigo-600 font-semibold hover:underline">Login</a></p>
+</div>
+</div>
+</section>`;
+}
+function renderSeekerDashboard() {
+const user = AppState.currentUser;
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div><h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Welcome back, ${user.full_name}! 👋</h1></div>
+<button onclick="navigate('seeker-search')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target"><i class="ph ph-magnifying-glass"></i> Find Jobs</button>
+</div>
+<div class="grid lg:grid-cols-3 gap-4 lg:gap-8">
+<div class="lg:col-span-2">
+<h2 class="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<button onclick="navigate('seeker-profile')" class="card-hover bg-white rounded-xl p-6 border border-slate-100 shadow-sm text-left flex flex-col items-center justify-center gap-4 h-40 touch-target">
+<div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600"><i class="ph ph-user text-2xl"></i></div>
+<div class="font-semibold text-slate-900">Edit Profile & Upload Docs</div>
+</button>
+<button onclick="navigate('seeker-applications')" class="card-hover bg-white rounded-xl p-6 border border-slate-100 shadow-sm text-left flex flex-col items-center justify-center gap-4 h-40 touch-target">
+<div class="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><i class="ph ph-file-text text-2xl"></i></div>
+<div class="font-semibold text-slate-900">My Applications</div>
+</button>
+</div>
+</div>
+</div>
+</section>`;
+}
+function renderSeekerProfile() {
+const user = AppState.currentUser;
+return `<section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900 mb-6 lg:mb-8">My Profile</h1>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 mb-6 lg:mb-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-4 lg:mb-6 flex items-center gap-2">
+<i class="ph ph-envelope text-indigo-600"></i> Email Verification
+</h2>
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+${user.email_verified == 1 ? `
+<div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+<i class="ph ph-check-circle text-2xl text-green-600"></i>
+</div>
+<div>
+<div class="font-semibold text-green-700">Email Verified</div>
+<div class="text-sm text-slate-500">Your email has been verified</div>
+</div>
+` : `
+<div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+<i class="ph ph-warning-circle text-2xl text-amber-600"></i>
+</div>
+<div>
+<div class="font-semibold text-amber-700">Email Not Verified</div>
+<div class="text-sm text-slate-500">Please verify your email to activate your account</div>
+</div>
+`}
+</div>
+${user.email_verified != 1 ? `
+<button onclick="resendVerificationEmail()" class="px-6 py-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors touch-target">
+Resend Verification Email
+</button>
+` : ''}
+</div>
+</div>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 mb-6 lg:mb-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-4 lg:mb-6 flex items-center gap-2">
+<i class="ph ph-camera text-indigo-600"></i> Profile Picture
+</h2>
+<div class="flex flex-col md:flex-row items-center gap-6">
+<div class="relative">
+<div class="w-32 h-32 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-5xl shadow-lg overflow-hidden border-4 border-white">
+${user.profile_picture ? `<img src="${user.profile_picture}" class="w-full h-full object-cover" alt="Profile" />` : '👤'}
+</div>
+</div>
+<div class="flex-1 text-center md:text-left">
+<h3 class="text-xl font-bold text-slate-900">${user.full_name}</h3>
+<p class="text-slate-500 mb-4">${user.email}</p>
+<label class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:bg-indigo-700 transition-colors cursor-pointer touch-target">
+<i class="ph ph-upload-simple"></i>
+Upload Photo
+<input type="file" accept="image/jpeg,image/jpg,image/png" class="hidden" onchange="uploadProfilePicture(event)" />
+</label>
+<p class="text-xs text-slate-500 mt-2">JPG, PNG only. Max 2MB.</p>
+</div>
+</div>
+</div>
+<form onsubmit="updateProfile(event)" class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 space-y-4 lg:space-y-6 mb-6 lg:mb-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+<i class="ph ph-user text-indigo-600"></i> Basic Information
+</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Full Name</label><input id="prof-name" type="text" value="${user.full_name}" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Phone</label><input id="prof-phone" type="tel" value="${user.phone || ''}" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+</div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Bio</label><textarea id="prof-bio" rows="4" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none touch-target">${user.bio || ''}</textarea></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Skills (comma separated)</label><input id="prof-skills" type="text" value="${user.skills || ''}" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<button type="submit" class="btn-primary px-8 py-3 text-white font-semibold rounded-xl shadow-lg touch-target">Save Changes</button>
+</form>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 mb-6 lg:mb-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+<i class="ph ph-link text-indigo-600"></i> Portfolio & Social Links
+</h2>
+<p class="text-slate-500 mb-4 lg:mb-6">Share your online presence with employers.</p>
+<div class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-globe text-indigo-600"></i> Portfolio Website
+</label>
+<input id="link-portfolio" type="url" value="${user.portfolio_url || ''}" placeholder="https://yourportfolio.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-github-logo text-slate-700"></i> GitHub
+</label>
+<input id="link-github" type="url" value="${user.github_url || ''}" placeholder="https://github.com/username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-linkedin-logo text-blue-600"></i> LinkedIn
+</label>
+<input id="link-linkedin" type="url" value="${user.linkedin_url || ''}" placeholder="https://linkedin.com/in/username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-twitter-logo text-sky-500"></i> Twitter / X
+</label>
+<input id="link-twitter" type="url" value="${user.twitter_url || ''}" placeholder="https://twitter.com/username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-facebook-logo text-blue-700"></i> Facebook
+</label>
+<input id="link-facebook" type="url" value="${user.facebook_url || ''}" placeholder="https://facebook.com/username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+<div>
+<label class="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+<i class="ph ph-instagram-logo text-pink-600"></i> Instagram
+</label>
+<input id="link-instagram" type="url" value="${user.instagram_url || ''}" placeholder="https://instagram.com/username" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+</div>
+</div>
+<button onclick="saveSocialLinks()" class="btn-primary px-8 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target">
+<i class="ph ph-floppy-disk"></i> Save Links
+</button>
+</div>
+</div>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 mb-6 lg:mb-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-2 flex items-center gap-2"><i class="ph ph-graduation-cap text-indigo-600"></i> Qualifications & Certificates</h2>
+<p class="text-slate-500 mb-4 lg:mb-6">Add your academic and professional qualifications.</p>
+<div class="border-t border-slate-100 pt-4 lg:pt-6 space-y-4">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<input id="qual-name" placeholder="Qualification Name" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<input id="qual-issuer" placeholder="Issuing Institution" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<input id="qual-date" placeholder="Year Obtained" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<div class="flex items-center gap-2">
+<input type="file" id="qual-file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" class="hidden" onchange="handleFileSelect('qual-file', 'qual-file-name')" />
+<button onclick="document.getElementById('qual-file').click()" class="px-4 py-2 bg-indigo-100 text-indigo-600 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium touch-target">
+<i class="ph ph-upload-simple"></i> Choose File
+</button>
+<span id="qual-file-name" class="text-sm text-slate-600 truncate max-w-xs">No file chosen</span>
+</div>
+</div>
+<button onclick="addQualification()" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target"><i class="ph ph-plus-circle"></i> Add Qualification</button>
+</div>
+</div>
+<div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8">
+<h2 class="text-xl lg:text-2xl font-bold text-slate-900 mb-2 flex items-center gap-2"><i class="ph ph-briefcase text-teal-600"></i> Experience & Proof</h2>
+<div class="border-t border-slate-100 pt-4 lg:pt-6 space-y-4">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<input id="exp-title" placeholder="Job Title & Company" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none md:col-span-2 touch-target" />
+<input id="exp-duration" placeholder="Duration" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<div class="flex items-center gap-2">
+<input type="file" id="exp-file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" class="hidden" onchange="handleFileSelect('exp-file', 'exp-file-name')" />
+<button onclick="document.getElementById('exp-file').click()" class="px-4 py-2 bg-teal-100 text-teal-600 rounded-lg hover:bg-teal-200 transition-colors text-sm font-medium touch-target">
+<i class="ph ph-upload-simple"></i> Choose File
+</button>
+<span id="exp-file-name" class="text-sm text-slate-600 truncate max-w-xs">No file chosen</span>
+</div>
+</div>
+<button onclick="addExperience()" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target"><i class="ph ph-plus-circle"></i> Add Experience</button>
+</div>
+</div>
+</section>`;
+}
+function renderSeekerSearch() {
+const { keyword, category, location, salary, job_type } = AppState.searchFilters;
+let filtered = AppState.jobs.filter(j => j.status === 'active');
+if (keyword) filtered = filtered.filter(j => j.title.toLowerCase().includes(keyword.toLowerCase()));
+if (category) filtered = filtered.filter(j => j.category === category);
+if (location) filtered = filtered.filter(j => j.location.toLowerCase().includes(location.toLowerCase()));
+if (salary) filtered = filtered.filter(j => j.salary >= parseInt(salary));
+if (job_type) filtered = filtered.filter(j => j.job_type === job_type);
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900 mb-6 lg:mb-8">Search Jobs</h1>
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 lg:p-6 mb-6 lg:mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+<input type="text" placeholder="Keyword..." value="${keyword}" oninput="updateSearchFilter('keyword', this.value)" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<select onchange="updateSearchFilter('category', this.value)" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white touch-target">
+<option value="">All Categories</option>
+${AppState.categories.map(c => `<option value="${c}" ${category===c?'selected':''}>${c}</option>`).join('')}
+</select>
+<input type="text" placeholder="Location..." value="${location}" oninput="updateSearchFilter('location', this.value)" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<input type="number" placeholder="Min Salary..." value="${salary}" oninput="updateSearchFilter('salary', this.value)" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" />
+<select onchange="updateSearchFilter('job_type', this.value)" class="px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white touch-target">
+<option value="">All Types</option>
+<option value="Full-time">Full-time</option>
+<option value="Part-time">Part-time</option>
+<option value="Contract">Contract</option>
+<option value="Remote">Remote</option>
+</select>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+${filtered.map(job => {
+return `<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm cursor-pointer" onclick="navigate('job-details', {id: ${job.id}})">
+<div class="flex items-start justify-between mb-4">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-teal-100 flex items-center justify-center text-2xl overflow-hidden">
+${renderAvatar(job.employer_avatar, '🏢')}
+</div>
+<span class="px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">${job.job_type}</span>
+</div>
+<h3 class="font-bold text-lg text-slate-900 mb-1">${job.title}</h3>
+<p class="text-sm text-indigo-600 font-medium mb-4">${job.company}</p>
+<div class="flex flex-wrap gap-2 mb-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md"><i class="ph ph-map-pin"></i> ${job.location}</span>
+<span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md"><i class="ph ph-currency-dollar"></i> ${formatCurrency(job.salary)}</span>
+</div>
+</div>`;
+}).join('')}
+</div>
+</section>`;
+}
+function renderSeekerApplications() {
+return `<section class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div>
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">My Applications</h1>
+<p class="text-slate-600 mt-1">Track the status of your job applications</p>
+</div>
+<button onclick="navigate('seeker-search')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target">
+<i class="ph ph-magnifying-glass"></i> Find More Jobs
+</button>
+</div>
+<div id="applications-loading" class="text-center py-12">
+<div class="loader"></div>
+<p class="text-slate-500 mt-4">Loading your applications...</p>
+</div>
+<div id="applications-content" style="display:none;"></div>
+</section>`;
+}
+async function loadMyApplications() {
+const loading = document.getElementById('applications-loading');
+const content = document.getElementById('applications-content');
+if (loading) loading.style.display = 'block';
+if (content) content.style.display = 'none';
+const data = await apiCall('get_my_applications');
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') {
+if (content) content.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-6 text-red-600">${data.message}</div>`;
+return;
+}
+const apps = data.data;
+if (apps.length === 0) {
+if (content) {
+content.innerHTML = `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 lg:p-12 text-center">
+<div class="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-4">
+<i class="ph ph-file-text text-4xl text-indigo-600"></i>
+</div>
+<h2 class="text-xl font-bold text-slate-900 mb-2">No Applications Yet</h2>
+<p class="text-slate-600 mb-6">You haven't applied to any jobs yet. Start browsing to find your dream job!</p>
+<button onclick="navigate('seeker-search')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl touch-target">Browse Jobs</button>
+</div>
+`;
+}
+return;
+}
+if (content) {
+content.innerHTML = `
+<div class="space-y-4">
+${apps.map(app => {
+const statusColors = { 'pending': 'bg-amber-100 text-amber-700', 'accepted': 'bg-green-100 text-green-700', 'rejected': 'bg-red-100 text-red-700' };
+const statusIcons = { 'pending': 'ph-clock', 'accepted': 'ph-check-circle', 'rejected': 'ph-x-circle' };
+const statusLabel = { 'pending': 'Pending Review', 'accepted': 'Accepted', 'rejected': 'Rejected' };
+const color = statusColors[app.status] || 'bg-slate-100 text-slate-600';
+const icon = statusIcons[app.status] || 'ph-question';
+const label = statusLabel[app.status] || app.status;
+const appliedDate = app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+return `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 lg:p-6 card-hover">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div class="flex-1">
+<div class="flex items-start gap-4">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-teal-100 flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden">
+${renderAvatar(app.company, '🏢')}
+</div>
+<div class="flex-1">
+<h3 class="font-bold text-lg text-slate-900">${app.title}</h3>
+<p class="text-sm text-indigo-600 font-medium">${app.company}</p>
+<div class="flex flex-wrap gap-3 mt-2 text-sm text-slate-600">
+<span class="flex items-center gap-1"><i class="ph ph-map-pin"></i> ${app.location}</span>
+<span class="flex items-center gap-1"><i class="ph ph-currency-dollar"></i> KES ${parseInt(app.salary).toLocaleString()}</span>
+<span class="flex items-center gap-1"><i class="ph ph-clock"></i> ${app.job_type}</span>
+</div>
+<p class="text-xs text-slate-500 mt-2">Applied on ${appliedDate}</p>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 ${color}">
+<i class="ph ${icon}"></i> ${label}
+</span>
+</div>
+</div>
+</div>
+`;
+}).join('')}
+</div>
+<div class="mt-6 lg:mt-8 bg-white rounded-2xl p-4 lg:p-6 border border-slate-100">
+<h3 class="font-bold text-slate-900 mb-4">Application Summary</h3>
+<div class="grid grid-cols-3 gap-3 lg:gap-4">
+<div class="p-4 rounded-xl bg-amber-50 border border-amber-100 text-center">
+<div class="text-2xl font-bold text-amber-700">${apps.filter(a => a.status === 'pending').length}</div>
+<div class="text-sm text-amber-600">Pending</div>
+</div>
+<div class="p-4 rounded-xl bg-green-50 border border-green-100 text-center">
+<div class="text-2xl font-bold text-green-700">${apps.filter(a => a.status === 'accepted').length}</div>
+<div class="text-sm text-green-600">Accepted</div>
+</div>
+<div class="p-4 rounded-xl bg-red-50 border border-red-100 text-center">
+<div class="text-2xl font-bold text-red-700">${apps.filter(a => a.status === 'rejected').length}</div>
+<div class="text-sm text-red-600">Rejected</div>
+</div>
+</div>
+</div>
+`;
+}
+}
+function renderEmployerDashboard() {
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div><h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Employer Dashboard</h1></div>
+<button onclick="navigate('employer-post-job')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target"><i class="ph ph-plus-circle"></i> Post New Job</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
+${[{ label: 'Total Jobs', val: AppState.jobs.filter(j=>j.employer_id==AppState.currentUser.id).length, icon: 'ph-briefcase', color: 'from-indigo-500 to-indigo-600' }].map(s => `
+<div class="card-hover bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center text-white shadow-lg mb-4"><i class="ph ${s.icon} text-2xl"></i></div>
+<div class="text-3xl font-bold text-slate-900">${s.val}</div><div class="text-slate-500 text-sm">${s.label}</div>
+</div>`).join('')}
+</div>
+</section>`;
+}
+function renderEmployerPostJob() {
+return `<section class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900 mb-2">Post a New Job</h1>
+<form onsubmit="postJob(event)" class="bg-white rounded-3xl shadow-sm border border-slate-100 p-4 lg:p-8 space-y-4 lg:space-y-6 mt-6 lg:mt-8">
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Job Title</label><input id="job-title" type="text" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Category</label><select id="job-category" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white touch-target">${AppState.categories.map(c => `<option value="${c}">${c}</option>`).join('')}</select></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Job Type</label><select id="job-type" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white touch-target"><option value="Full-time">Full-time</option><option value="Part-time">Part-time</option><option value="Contract">Contract</option><option value="Remote">Remote</option></select></div>
+</div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Location</label><input id="job-location" type="text" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Monthly Salary (KES)</label><input id="job-salary" type="number" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Deadline</label><input id="job-deadline" type="date" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" /></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Required Qualifications (Comma separated)</label><textarea id="job-req-quals" rows="3" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none touch-target" placeholder="e.g. BSc Computer Science, 2 years experience"></textarea></div>
+<div><label class="block text-sm font-medium text-slate-700 mb-2">Job Description</label><textarea id="job-desc" required rows="6" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none touch-target"></textarea></div>
+<button type="submit" class="btn-primary px-8 py-3 text-white font-semibold rounded-xl shadow-lg touch-target">Post Job</button>
+</form>
+</section>`;
+}
+function renderEmployerManageJobs() {
+const myJobs = AppState.jobs.filter(j => j.employer_id == AppState.currentUser.id);
+return `<section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"><h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Manage Jobs</h1><button onclick="navigate('employer-post-job')" class="btn-primary px-6 py-3 text-white font-semibold rounded-xl shadow-lg flex items-center gap-2 touch-target"><i class="ph ph-plus-circle"></i> Post New Job</button></div>
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-slate-50 border-b border-slate-100"><tr><th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Title</th><th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th><th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Actions</th></tr></thead>
+<tbody class="divide-y divide-slate-100">
+${myJobs.map(job => `
+<tr class="hover:bg-slate-50">
+<td class="px-4 lg:px-6 py-4 font-semibold text-slate-900">${job.title}</td>
+<td class="px-4 lg:px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-semibold ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}">${job.status}</span></td>
+<td class="px-4 lg:px-6 py-4">
+<div class="flex gap-2">
+<button onclick="navigate('employer-applicants', {jobId: ${job.id}})" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg touch-target" title="View Applicants">
+<i class="ph ph-users text-lg"></i>
+</button>
+<button onclick="editJob(${job.id})" class="p-2 text-amber-600 hover:bg-amber-50 rounded-lg touch-target" title="Edit Job">
+<i class="ph ph-pencil-simple text-lg"></i>
+</button>
+</div>
+</td>
+</tr>`).join('')}
+</tbody>
+</table>
+</div>
+</div>
+</section>`;
+}
+function renderEmployerApplicants(jobId) {
+return `<section class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<button onclick="navigate('employer-manage-jobs')" class="mb-6 text-slate-600 hover:text-indigo-600 flex items-center gap-2 font-medium touch-target">
+<i class="ph ph-arrow-left"></i> Back to Manage Jobs
+</button>
+<div class="mb-6 lg:mb-8">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Job Applicants</h1>
+<p class="text-slate-600 mt-1">Review and manage applicants for this position</p>
+</div>
+<div id="applicants-loading" class="text-center py-12">
+<div class="loader"></div>
+<p class="text-slate-500 mt-4">Loading applicants...</p>
+</div>
+<div id="applicants-content" style="display:none;"></div>
+</section>`;
+}
+async function loadJobApplicants(jobId) {
+const loading = document.getElementById('applicants-loading');
+const content = document.getElementById('applicants-content');
+if (loading) loading.style.display = 'block';
+if (content) content.style.display = 'none';
+const data = await apiCall('get_job_applicants', 'POST', { job_id: jobId });
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') {
+if (content) content.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-xl p-6 text-red-600">${data.message}</div>`;
+return;
+}
+const applicants = data.data;
+if (applicants.length === 0) {
+if (content) {
+content.innerHTML = `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 lg:p-12 text-center">
+<div class="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-4">
+<i class="ph ph-users text-4xl text-indigo-600"></i>
+</div>
+<h2 class="text-xl font-bold text-slate-900 mb-2">No Applicants Yet</h2>
+<p class="text-slate-600">No one has applied to this job yet.</p>
+</div>
+`;
+}
+return;
+}
+if (content) {
+content.innerHTML = `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+<div class="p-4 lg:p-6 border-b border-slate-100 bg-slate-50">
+<div class="flex justify-between items-center">
+<div>
+<h3 class="font-bold text-slate-900">${applicants.length} Applicant${applicants.length !== 1 ? 's' : ''}</h3>
+<p class="text-sm text-slate-600">Review each applicant and update their status</p>
+</div>
+</div>
+</div>
+<div class="divide-y divide-slate-100">
+${applicants.map(app => {
+const statusColors = { 'pending': 'bg-amber-100 text-amber-700', 'accepted': 'bg-green-100 text-green-700', 'rejected': 'bg-red-100 text-red-700' };
+const color = statusColors[app.status] || 'bg-slate-100 text-slate-600';
+const appliedDate = app.applied_at ? new Date(app.applied_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+const avatar = app.profile_picture ? `<img src="${app.profile_picture}" class="w-full h-full object-cover" alt="${app.full_name}" />` : '👤';
+return `
+<div class="p-4 lg:p-6 hover:bg-slate-50 transition-colors">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+<div class="flex items-start gap-4 flex-1">
+<div class="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-teal-500 flex items-center justify-center text-2xl shadow-lg overflow-hidden flex-shrink-0">
+${avatar}
+</div>
+<div class="flex-1">
+<div class="flex flex-wrap items-center gap-2 mb-1">
+<h3 class="font-bold text-lg text-slate-900">${app.full_name}</h3>
+<span class="px-3 py-1 rounded-full text-xs font-semibold ${color} capitalize">${app.status}</span>
+</div>
+<div class="flex flex-wrap gap-3 text-sm text-slate-600 mb-2">
+<span class="flex items-center gap-1"><i class="ph ph-envelope"></i> ${app.email}</span>
+<span class="flex items-center gap-1"><i class="ph ph-phone"></i> ${app.phone || 'N/A'}</span>
+</div>
+${app.bio ? `<p class="text-sm text-slate-700 mb-2"><strong>Bio:</strong> ${app.bio}</p>` : ''}
+${app.skills ? `<p class="text-sm text-slate-700 mb-2"><strong>Skills:</strong> ${app.skills}</p>` : ''}
+<div class="flex flex-wrap gap-2 mt-2">
+${app.portfolio_url ? `<a href="${app.portfolio_url}" target="_blank" class="text-xs px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 flex items-center gap-1 touch-target"><i class="ph ph-globe"></i> Portfolio</a>` : ''}
+${app.linkedin_url ? `<a href="${app.linkedin_url}" target="_blank" class="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 flex items-center gap-1 touch-target"><i class="ph ph-linkedin-logo"></i> LinkedIn</a>` : ''}
+${app.github_url ? `<a href="${app.github_url}" target="_blank" class="text-xs px-3 py-1 bg-slate-100 text-slate-700 rounded-full hover:bg-slate-200 flex items-center gap-1 touch-target"><i class="ph ph-github-logo"></i> GitHub</a>` : ''}
+</div>
+<p class="text-xs text-slate-500 mt-2">Applied on ${appliedDate}</p>
+</div>
+</div>
+<div class="flex gap-2 lg:flex-col">
+${app.status !== 'accepted' ? `
+<button onclick="updateApplicantStatus(${app.application_id}, 'accepted', ${jobId})" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm touch-target">
+<i class="ph ph-check"></i> Accept
+</button>
+` : '<span class="px-4 py-2 bg-green-100 text-green-700 font-semibold rounded-lg text-sm flex items-center gap-2"><i class="ph ph-check-circle"></i> Accepted</span>'}
+${app.status !== 'rejected' ? `
+<button onclick="updateApplicantStatus(${app.application_id}, 'rejected', ${jobId})" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 text-sm touch-target">
+<i class="ph ph-x"></i> Reject
+</button>
+` : '<span class="px-4 py-2 bg-red-100 text-red-700 font-semibold rounded-lg text-sm flex items-center gap-2"><i class="ph ph-x-circle"></i> Rejected</span>'}
+</div>
+</div>
+</div>
+`;
+}).join('')}
+</div>
+</div>
+`;
+}
+}
+async function updateApplicantStatus(applicationId, status, jobId) {
+const action = status === 'accepted' ? 'accept' : 'reject';
+if (!confirm(`Are you sure you want to ${action} this applicant?`)) return;
+const data = await apiCall('update_application_status', 'POST', { application_id: applicationId, status: status });
+if (data.status === 'success') { showToast(`Applicant ${status} successfully!`, 'success'); loadJobApplicants(jobId); }
+else { showToast(data.message, 'error'); }
+}
+function renderAdminDashboard() {
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Admin Dashboard</h1>
+<p class="text-slate-600 mt-1">System overview and statistics</p>
+</div>
+<div id="admin-stats-loading" class="text-center py-12">
+<div class="loader"></div>
+<p class="text-slate-500 mt-4">Loading statistics...</p>
+</div>
+<div id="admin-stats-content" style="display:none;"></div>
+</section>`;
+}
+async function loadAdminStats() {
+const data = await apiCall('get_dashboard_stats');
+const loading = document.getElementById('admin-stats-loading');
+const content = document.getElementById('admin-stats-content');
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') { if (content) content.innerHTML = '<p class="text-red-500">Failed to load stats</p>'; return; }
+const s = data.data;
+if (content) {
+content.innerHTML = `
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
+<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg"><i class="ph ph-users text-xl lg:text-2xl"></i></div>
+</div>
+<div class="text-2xl lg:text-3xl font-bold text-slate-900">${s.total_users}</div>
+<div class="text-slate-500 text-xs lg:text-sm">Total Users</div>
+</div>
+<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white shadow-lg"><i class="ph ph-briefcase text-xl lg:text-2xl"></i></div>
+</div>
+<div class="text-2xl lg:text-3xl font-bold text-slate-900">${s.total_jobs}</div>
+<div class="text-slate-500 text-xs lg:text-sm">Total Jobs (${s.active_jobs} active)</div>
+</div>
+<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-lg"><i class="ph ph-file-text text-xl lg:text-2xl"></i></div>
+</div>
+<div class="text-2xl lg:text-3xl font-bold text-slate-900">${s.total_applications}</div>
+<div class="text-slate-500 text-xs lg:text-sm">Total Applications</div>
+</div>
+<div class="card-hover bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg"><i class="ph ph-check-circle text-xl lg:text-2xl"></i></div>
+</div>
+<div class="text-2xl lg:text-3xl font-bold text-slate-900">${s.accepted_apps}</div>
+<div class="text-slate-500 text-xs lg:text-sm">Accepted Applications</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-6 lg:mb-8">
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4">User Distribution</h3>
+<div class="space-y-3">
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="text-slate-600">Job Seekers</span><span class="font-semibold">${s.total_seekers}</span></div>
+<div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-indigo-500 h-3 rounded-full" style="width: ${(s.total_seekers/s.total_users*100)}%"></div></div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="text-slate-600">Employers</span><span class="font-semibold">${s.total_employers}</span></div>
+<div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-teal-500 h-3 rounded-full" style="width: ${(s.total_employers/s.total_users*100)}%"></div></div>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4">Application Status</h3>
+<div class="space-y-3">
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="text-slate-600">Pending</span><span class="font-semibold">${s.pending_apps}</span></div>
+<div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-amber-500 h-3 rounded-full" style="width: ${(s.pending_apps/s.total_applications*100)}%"></div></div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="text-slate-600">Accepted</span><span class="font-semibold">${s.accepted_apps}</span></div>
+<div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-green-500 h-3 rounded-full" style="width: ${(s.accepted_apps/s.total_applications*100)}%"></div></div>
+</div>
+<div>
+<div class="flex justify-between text-sm mb-1"><span class="text-slate-600">Rejected</span><span class="font-semibold">${s.rejected_apps}</span></div>
+<div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-red-500 h-3 rounded-full" style="width: ${(s.rejected_apps/s.total_applications*100)}%"></div></div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4">Jobs by Category</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
+${s.jobs_by_category.map(c => `
+<div class="p-3 lg:p-4 rounded-xl bg-slate-50 border border-slate-100">
+<div class="font-semibold text-slate-900 text-sm lg:text-base">${c.category}</div>
+<div class="text-xl lg:text-2xl font-bold text-indigo-600">${c.count}</div>
+</div>
+`).join('')}
+</div>
+</div>
+`;
+}
+}
+function renderAdminUsers() {
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8 flex justify-between items-center">
+<div>
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Manage Users</h1>
+<p class="text-slate-600 mt-1">View and manage all registered users</p>
+</div>
+</div>
+<div id="admin-users-loading" class="text-center py-12">
+<div class="loader"></div>
+</div>
+<div id="admin-users-content" style="display:none;"></div>
+</section>`;
+}
+async function loadAdminUsers() {
+const data = await apiCall('get_all_users');
+const loading = document.getElementById('admin-users-loading');
+const content = document.getElementById('admin-users-content');
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') { if (content) content.innerHTML = '<p class="text-red-500">Failed to load users</p>'; return; }
+const users = data.data;
+if (content) {
+content.innerHTML = `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-slate-50 border-b border-slate-100">
+<tr>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">User</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Email</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Role</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden md:table-cell">Phone</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden lg:table-cell">Joined</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+${users.map(user => `
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="px-4 lg:px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-100 to-teal-100 flex items-center justify-center text-lg">👤</div>
+<span class="font-semibold text-slate-900 text-sm lg:text-base">${user.full_name}</span>
+</div>
+</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm">${user.email}</td>
+<td class="px-4 lg:px-6 py-4">
+<span class="px-3 py-1 rounded-full text-xs font-semibold capitalize ${user.role==='admin' ? 'bg-purple-100 text-purple-700' : user.role==='employer' ? 'bg-teal-100 text-teal-700' : 'bg-indigo-100 text-indigo-700'}">${user.role}</span>
+</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm hidden md:table-cell">${user.phone || '-'}</td>
+<td class="px-4 lg:px-6 py-4 text-slate-500 text-sm hidden lg:table-cell">${user.created_at ? user.created_at.split(' ')[0] : '-'}</td>
+<td class="px-4 lg:px-6 py-4">
+${user.role !== 'admin' ? `
+<button onclick="deleteUser(${user.id}, '${user.full_name.replace(/'/g, "\\'")}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg touch-target" title="Delete User">
+<i class="ph ph-trash text-lg"></i>
+</button>
+` : '<span class="text-xs text-slate-400">Protected</span>'}
+</td>
+</tr>
+`).join('')}
+</tbody>
+</table>
+</div>
+</div>
+`;
+}
+}
+async function deleteUser(userId, userName) {
+if (!confirm(`Are you sure you want to delete user "${userName}"? This cannot be undone.`)) return;
+const data = await apiCall('delete_user', 'POST', { user_id: userId });
+if (data.status === 'success') { showToast('User deleted successfully', 'success'); loadAdminUsers(); }
+else { showToast(data.message, 'error'); }
+}
+function renderAdminJobs() {
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Manage Jobs</h1>
+<p class="text-slate-600 mt-1">Review and manage all job postings</p>
+</div>
+<div id="admin-jobs-loading" class="text-center py-12">
+<div class="loader"></div>
+</div>
+<div id="admin-jobs-content" style="display:none;"></div>
+</section>`;
+}
+async function loadAdminJobs() {
+const data = await apiCall('get_all_jobs');
+const loading = document.getElementById('admin-jobs-loading');
+const content = document.getElementById('admin-jobs-content');
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') { if (content) content.innerHTML = '<p class="text-red-500">Failed to load jobs</p>'; return; }
+const jobs = data.data;
+if (content) {
+content.innerHTML = `
+<div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-slate-50 border-b border-slate-100">
+<tr>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Job Title</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden md:table-cell">Employer</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden lg:table-cell">Category</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden lg:table-cell">Location</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase hidden md:table-cell">Salary</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
+<th class="px-4 lg:px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+${jobs.map(job => `
+<tr class="hover:bg-slate-50 transition-colors">
+<td class="px-4 lg:px-6 py-4 font-semibold text-slate-900 text-sm lg:text-base">${job.title}</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm hidden md:table-cell">${job.company || job.employer_name}</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm hidden lg:table-cell">${job.category}</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm hidden lg:table-cell">${job.location}</td>
+<td class="px-4 lg:px-6 py-4 text-slate-600 text-sm hidden md:table-cell">KES ${parseInt(job.salary).toLocaleString()}</td>
+<td class="px-4 lg:px-6 py-4">
+<span class="px-3 py-1 rounded-full text-xs font-semibold ${job.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}">${job.status}</span>
+</td>
+<td class="px-4 lg:px-6 py-4">
+<div class="flex gap-2">
+<button onclick="toggleJobStatus(${job.id})" class="p-2 text-teal-600 hover:bg-teal-50 rounded-lg touch-target" title="Toggle Status">
+<i class="ph ph-toggle-left text-lg"></i>
+</button>
+<button onclick="deleteJobAdmin(${job.id}, '${job.title.replace(/'/g, "\\'")}')" class="p-2 text-red-600 hover:bg-red-50 rounded-lg touch-target" title="Delete Job">
+<i class="ph ph-trash text-lg"></i>
+</button>
+</div>
+</td>
+</tr>
+`).join('')}
+</tbody>
+</table>
+</div>
+</div>
+`;
+}
+}
+async function toggleJobStatus(jobId) {
+const data = await apiCall('toggle_job_status', 'POST', { job_id: jobId });
+if (data.status === 'success') { showToast(data.message, 'success'); loadAdminJobs(); }
+else { showToast(data.message, 'error'); }
+}
+async function deleteJobAdmin(jobId, jobTitle) {
+if (!confirm(`Delete job "${jobTitle}"? This cannot be undone.`)) return;
+const data = await apiCall('delete_job', 'POST', { job_id: jobId });
+if (data.status === 'success') { showToast('Job deleted successfully', 'success'); loadAdminJobs(); }
+else { showToast(data.message, 'error'); }
+}
+function renderAdminReports() {
+return `<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 animate-fadeIn">
+<div class="mb-6 lg:mb-8">
+<h1 class="text-2xl lg:text-3xl font-bold text-slate-900">Reports & Statistics</h1>
+<p class="text-slate-600 mt-1">Comprehensive analytics for the platform</p>
+</div>
+<div id="admin-reports-loading" class="text-center py-12">
+<div class="loader"></div>
+</div>
+<div id="admin-reports-content" style="display:none;"></div>
+</section>`;
+}
+async function loadAdminReports() {
+const data = await apiCall('get_dashboard_stats');
+const loading = document.getElementById('admin-reports-loading');
+const content = document.getElementById('admin-reports-content');
+if (loading) loading.style.display = 'none';
+if (content) content.style.display = 'block';
+if (data.status !== 'success') { if (content) content.innerHTML = '<p class="text-red-500">Failed to load reports</p>'; return; }
+const s = data.data;
+if (content) {
+content.innerHTML = `
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8">
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4 lg:mb-6">Jobs by Category</h3>
+<div class="h-64"><canvas id="categoryChart"></canvas></div>
+</div>
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4 lg:mb-6">User Roles</h3>
+<div class="h-64"><canvas id="roleChart"></canvas></div>
+</div>
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4 lg:mb-6">Application Status</h3>
+<div class="h-64"><canvas id="statusChart"></canvas></div>
+</div>
+<div class="bg-white rounded-2xl p-4 lg:p-6 border border-slate-100 shadow-sm">
+<h3 class="font-bold text-slate-900 mb-4 lg:mb-6">Key Metrics</h3>
+<div class="space-y-3 lg:space-y-4">
+<div class="p-3 lg:p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+<div class="text-sm text-indigo-600">Total Users</div>
+<div class="text-2xl lg:text-3xl font-bold text-indigo-900">${s.total_users}</div>
+</div>
+<div class="p-3 lg:p-4 rounded-xl bg-teal-50 border border-teal-100">
+<div class="text-sm text-teal-600">Active Jobs</div>
+<div class="text-2xl lg:text-3xl font-bold text-teal-900">${s.active_jobs}</div>
+</div>
+<div class="p-3 lg:p-4 rounded-xl bg-amber-50 border border-amber-100">
+<div class="text-sm text-amber-600">Pending Applications</div>
+<div class="text-2xl lg:text-3xl font-bold text-amber-900">${s.pending_apps}</div>
+</div>
+<div class="p-3 lg:p-4 rounded-xl bg-green-50 border border-green-100">
+<div class="text-sm text-green-600">Success Rate</div>
+<div class="text-2xl lg:text-3xl font-bold text-green-900">${s.total_applications > 0 ? Math.round(s.accepted_apps/s.total_applications*100) : 0}%</div>
+</div>
+</div>
+</div>
+</div>
+`;
+setTimeout(() => initAdminCharts(s), 100);
+}
+}
+function initAdminCharts(stats) {
+if (window.adminCharts) { window.adminCharts.forEach(c => c.destroy()); }
+window.adminCharts = [];
+const catCtx = document.getElementById('categoryChart');
+if (catCtx) {
+const chart = new Chart(catCtx, { type: 'bar', data: { labels: stats.jobs_by_category.map(c => c.category), datasets: [{ label: 'Jobs', data: stats.jobs_by_category.map(c => c.count), backgroundColor: '#6366F1', borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+window.adminCharts.push(chart);
+}
+const roleCtx = document.getElementById('roleChart');
+if (roleCtx) {
+const chart = new Chart(roleCtx, { type: 'doughnut', data: { labels: ['Seekers', 'Employers', 'Admins'], datasets: [{ data: [stats.total_seekers, stats.total_employers, 1], backgroundColor: ['#6366F1', '#14B8A6', '#F59E0B'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%' } });
+window.adminCharts.push(chart);
+}
+const statusCtx = document.getElementById('statusChart');
+if (statusCtx) {
+const chart = new Chart(statusCtx, { type: 'pie', data: { labels: ['Pending', 'Accepted', 'Rejected'], datasets: [{ data: [stats.pending_apps, stats.accepted_apps, stats.rejected_apps], backgroundColor: ['#F59E0B', '#10B981', '#EF4444'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false } });
+window.adminCharts.push(chart);
+}
+}
+loadInitialData();
+</script>
+</body>
+</html>
+```
