@@ -1,0 +1,26 @@
+# Sensitive configuration files - NEVER upload these
+api/config.php
+
+# User uploaded files
+uploads/*
+!uploads/.gitkeep
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+php_error_log
+
+# Temporary files
+*.tmp
+*.temp
