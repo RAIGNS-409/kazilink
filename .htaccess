@@ -1,0 +1,16 @@
+# Tell Apache to load frontend/index.html as the default page
+DirectoryIndex frontend/index.html index.html index.php
+
+# Enable URL rewriting
+RewriteEngine On
+
+# Allow API calls to pass through directly
+RewriteRule ^api/(.*)$ api/$1 [L]
+
+# Serve frontend for all other routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ frontend/index.html [L]
+
+# Security: Prevent directory listing
+Options -Indexes
